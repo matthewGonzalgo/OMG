@@ -10,10 +10,12 @@ import argparse # For command line interface
 import math
 
 '''
+This is a Resampler for one year of swath data.
 Take data and annotation files as arguments
 Store data array from data file
 Parse annotation file for number of longitude and latitude lines, starting longitude and latitude for area extent, and spacing
 Use number of longitude and latitude lines to reshape the the data array
+Create utm arrays from the latlons
 Find minimum data value and make a new data array that fills values lower than minimum with np.nan
 Use parsed starting longitude and latitude corners to define area extent of original area
 '''
@@ -50,22 +52,25 @@ def get_variables(annotation):
 
 #
 # Plots both the original data input and the resampled data
+# May need to change saving locations on other machines
 #
-def plot_data(original, xspace, yspace, resampled):
+def plot_data(original, xspace, yspace, resampled, name):
     start_time = time.time()
     plt.figure(figsize=(10,10));plt.imshow(original, vmin=0, vmax=500, cmap='jet');plt.colorbar()
     print("Original plotting time: --- %s seconds ---" % (time.time() - start_time))
+    plt.savefig("/Users/gonzalgo/Desktop/images/" + name + "original.png")
 
     start_time = time.time()
     plt.figure(figsize=(10, 10));plt.pcolormesh(xspace, yspace, resampled);plt.colorbar();plt.grid()
     print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
 
+    plt.savefig("/Users/gonzalgo/Desktop/images/" + name + "resampled.png")
     plt.show()
     print("Plotting complete")
 
 
 
-def resample(grid, variables, resolution, test):
+def resample(grid, variables, resolution, test, name):
     # Assuming data and annotation file have the same name, just different type and contain only one period
 
     # lat/lon_lines required to be int not float
@@ -96,13 +101,12 @@ def resample(grid, variables, resolution, test):
     grid = grid[::test, ::test]
     lats = lats[::test]
     lons = lons[::test]
-    if test is not 1:
+    lon_lines = lons.size
+    lat_lines = lats.size
+    '''if test is not 1:
         lon_lines = math.ceil(lon_lines / test)
         lat_lines = math.ceil(lat_lines / test)
-        '''ur_lat = math.ceil(ur_lat / test)
-        ur_lon = math.ceil(ur_lon / test)
-        ll_lat = math.ceil(ll_lat / test)
-        ll_lon = math.ceil(ll_lon / test)'''
+    '''
 
     #
     # Original Area definition:
@@ -122,6 +126,7 @@ def resample(grid, variables, resolution, test):
     # (x_lower, x_higher, y_lower, y_higher) = scale_dimensions(.2, x_low, x_high, y_low, y_high, dx, dy)
     tag = str(utm.from_latlon(ll_lat, ll_lon)[2])
     print("Tag: " + tag)
+
     #
     # New Area definition we have defined:
     #
@@ -135,7 +140,7 @@ def resample(grid, variables, resolution, test):
     print(width_new)
     print(height_new)
 
-    area_extent_new = (x_utm_corners[0], y_utm_corners[-1], x_utm_centers[-1], y_utm_corners[0])
+    area_extent_new = (x_utm_corners[0], y_utm_corners[-1], x_utm_centers[-1], y_utm_corners[0]) # may need to revisit
     area_new = geometry.AreaDefinition(area_id_new, description_new, proj_id_new, proj_string_new, width_new, height_new, area_extent_new)
 
     
@@ -151,10 +156,11 @@ def resample(grid, variables, resolution, test):
     print("Grid shape:")
     print(grid.shape)
 
-    #wf = lambda r: 1 - r/200
+    wf = lambda r: 1
     start_time = time.time()
-    #result = kd_tree.resample_custom(area_original, grid, area_new, radius_of_influence=resolution / 2, fill_value=np.nan, weight_funcs=wf)
-    result = kd_tree.resample_nearest(area_original, grid, area_new, radius_of_influence=resolution * 10, fill_value=np.nan)
+    # Multiplying radius of influence by test to account for skipping data when downsizing
+    result = kd_tree.resample_custom(area_original, grid, area_new, radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), fill_value=np.nan, weight_funcs=wf)
+    #result = kd_tree.resample_nearest(area_original, grid, area_new, radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), fill_value=np.nan)
 
     print("Result calculation time: --- %s seconds ---" % (time.time() - start_time))
     print("Result shape:")
@@ -171,7 +177,7 @@ def resample(grid, variables, resolution, test):
     print("Resample complete")
 
     
-    plot_data(grid, xx, yy, result)
+    plot_data(grid, xx, yy, result, name)
 
     
     return (result, area_new, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers)
@@ -281,9 +287,9 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.attrs['srid'] = "urn:ogc:def:crs:EPSG::32624"
     swath.attrs['proj4text'] = new_area.proj4_string
     swath.attrs['Projection'] = new_area.description
-    swath.attrs['proj_id'] = new_area.proj_id
+    swath.attrs['proj_id'] = name #new_area.proj_id
     swath.attrs['Insitution'] = 'JPL'
-    swath.attrs['author'] = 'Matthew G.'
+    swath.attrs['author'] = 'Matthew Gonzalgo & Forrest Graham'
     swath.attrs['nx'] = len(utm_x)-1
     swath.attrs['ny'] = len(utm_y)-1
     swath.attrs['_FillValue'] = np.NaN
@@ -314,7 +320,10 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.attrs['geospatial_y_resolution'] = str(resolution) + " meters"
     
     print(swath)
-    swath.to_netcdf(path + name + ".nc")
+    
+    saved = path + str(resolution) + "m_" + name + ".nc"
+    swath.to_netcdf(saved)
+    print("Swath saved to " + saved)
 
 
 if __name__ == '__main__':
@@ -326,13 +335,14 @@ if __name__ == '__main__':
     #
     parser.add_argument("-d", "--data", action="store", help="Complete path to data file", dest="data", type=str, required=True)
     parser.add_argument("-t", "--test", action="store", help="Varible to scale down data and decrease runtime for testing", default=1, dest="test", type=int, required=False)
-    parser.add_argument("-r", "--res", action="store", help="Resolution", default=100, dest="res", type=int, required=False)
+    parser.add_argument("-r", "--res", action="store", help="Resolution", default=10, dest="res", type=int, required=False)
     parser.add_argument("-s", "--save", action="store", help="Path to save", default="/Users/gonzalgo/Desktop/", dest="save",  type=str, required=False)
+    parser.add_argument("-x", "--suffix", action="store", help="filename suffix", default="", dest="suf",  type=str, required=False)
 
     args = parser.parse_args()
-    name = args.data[args.data.find("greenl"):args.data.find(".")]
+    name = args.data[args.data.find("greenl"):args.data.find(".")] + args.suf
     print("Name: " + name)
-    annotation = name + '.ann'
+    annotation = args.data[:args.data.find(".")] + '.ann'
     print("Annotation:" + annotation)
     vars = get_variables(annotation)
     print(vars)
@@ -348,8 +358,8 @@ if __name__ == '__main__':
     grid_nan = np.where(grid > grid.min(), grid, np.nan)
 
 
-    (plot, new_area, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers) = resample(grid_nan, vars, args.res, args.test)
-    name = args.data[args.data.find("greenl"):args.data.find(".")]
+    (plot, new_area, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers) = resample(grid_nan, vars, args.res, args.test, name)
+
     save_resample(plot, x_utm_centers, y_utm_centers, new_area, args.res, name, args.save)
 
     print("Done")
