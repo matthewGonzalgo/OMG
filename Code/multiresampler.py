@@ -13,6 +13,7 @@ import math
 '''
 This is a resampler for an entire collection of swath data.
 The main argument is the directory containing all the years data for a given swath
+Assumes the directory and file names are consistent with the 'greenl' naming convention
 Store data array from data file
 Parse all annotation files in a given directory for number of longitude and latitude lines, starting longitude and latitude for area extent, and spacing
 Keep track of the largest longitude and latitude bounds based on the corners
@@ -74,11 +75,12 @@ def get_variables(annotation):
     print(vardict.values())
     return vardict  
 
+
 #
 # Plots both the original data input and the resampled data
 # May need to change saving locations on other machines
 #
-def plot_data(original, xspace, yspace, resampled, name, path):
+def plot_and_save(original, xspace, yspace, resampled, resolution, name, path):
     start_time = time.time()
     plt.figure(figsize=(10,10));plt.imshow(original, vmin=0, vmax=500, cmap='jet');plt.colorbar()
     print("Original plotting time: --- %s seconds ---" % (time.time() - start_time))
@@ -94,7 +96,7 @@ def plot_data(original, xspace, yspace, resampled, name, path):
 
 
 
-def resample(grid, vardict, area_new, test, resolution, name, fig_dir):
+def resample(grid, vardict, area_new, test, resolution):
     # Assuming data and annotation file have the same name, just different type and contain only one period
     
     lats = np.linspace(vardict['lat_start'] - 0.5 * vardict['lat_space'], (vardict['lat_start'] - 0.5 * vardict['lat_space']) + (vardict['lat_space'] * (vardict['lat_lines'] + 1)), vardict['lat_lines'] + 1)
@@ -147,16 +149,8 @@ def resample(grid, vardict, area_new, test, resolution, name, fig_dir):
     xe = np.linspace(x_low, x_high, width_new) 
     ye = np.linspace(y_high, y_low, height_new)
     '''
- 
-    
-
     
     print("Resample complete")
-
-    
-   
-
-    
     return result
 
 
@@ -175,6 +169,7 @@ def get_utm_range(ll_lat, ll_lon, ur_lat, ur_lon):
     dy = y_high - y_low
 
     return (x_low, x_high, dx, y_low, y_high, dy)
+
 
 # 
 # Increases an area in all directions by a set factor given the area's corners
@@ -235,6 +230,7 @@ def create_utms(resolution, ll_lat, ll_lon, ur_lat, ur_lon):
     print(x_utm_corners.shape, y_utm_corners.shape)
     print("utm arrays created")
     return (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells)
+
 
 #
 # Saves resampled swath data in netCDF format using xarray
@@ -302,6 +298,14 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.to_netcdf(saved)
     print("Swath saved to " + saved)
 
+def create_directory(dirName):
+    try:
+        # Create target Directory
+        os.mkdir(dirName)
+        print("Directory " , dirName ,  " Created ") 
+    except FileExistsError:
+        print("Directory " , dirName ,  " already exists")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -340,7 +344,11 @@ if __name__ == '__main__':
             cornerdict['ll_lon'] = vardict['ll_lon']
     print(cornerdict)
 
-    (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells) = create_utms(args.res, cornerdict['ll_lat'], cornerdict['ll_lon'], cornerdict['ur_lat'], cornerdict['ur_lon'])
+    (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells) = create_utms(args.res, \
+                                                                                        cornerdict['ll_lat'], \
+                                                                                        cornerdict['ll_lon'], \
+                                                                                        cornerdict['ur_lat'], \
+                                                                                        cornerdict['ur_lon'])
 
     tag = str(utm.from_latlon(cornerdict['ll_lat'], cornerdict['ll_lon'])[2])
     print("Tag: " + tag)
@@ -366,42 +374,49 @@ if __name__ == '__main__':
 
     print("New area shape:")
     print(area_new.shape)
+   
 
+    # For data plotting
     xx, yy = np.meshgrid(x_utm_corners, y_utm_corners)
 
     for grd in glob.glob('*.grd'):
+        print(grd)
         g = np.fromfile(grd, dtype = '<f4')
+
         ann = grd[:grd.find(".")] + '.ann'
         vdict = get_variables(ann)       
+
         grid = np.reshape(g, (vdict['lat_lines'], vdict['lon_lines']))
+
         print(grid.min()) # Should be -10000.0
         grid_nan = np.where(grid > grid.min(), grid, np.nan)
 
 
         print("Annotation:" + annotation)
-        name = grd[grd.find("greenl"):grd.find(".")] + args.suf
+        name = str(args.res) + "m_" + grd[grd.find("greenl"):grd.find(".")] + args.suf
         print("Name: " + name)
-        fig_dir = args.dir + "_plots"
-        try:
-            # Create target Directory
-            os.mkdir(fig_dir)
-            print("Directory " , fig_dir ,  " Created ") 
-        except FileExistsError:
-            print("Directory " , fig_dir ,  " already exists")
+
+        # Creating and saving this new directory within the current directory of data
+        fig_dir = args.dir + args.dir[args.dir.find("/greenl"):] + "_plots"
+        print("fig_dir: " + fig_dir)
+        create_directory(fig_dir)
 
 
-        plot = resample(grd, get_variables(ann), area_new, args.test, args.res, name, fig_dir)
-        plot_data(grid, xx, yy, plot, name, fig_dir)
+        plot = resample(grid_nan, get_variables(ann), area_new, args.test, args.res)
 
-        net_dir = args.dir + "_netCDF"
-        try:
-            # Create target Directory
-            os.mkdir(net_dir)
-            print("Directory " , net_dir ,  " Created ") 
-        except FileExistsError:
-            print("Directory " , net_dir ,  " already exists")
+        # For the purpose of saving,
+        fig_dir = fig_dir + "/"
+        print("fig_dir/: " + fig_dir)
+        plot_and_save(grid_nan, xx, yy, plot, args.res, name, fig_dir)
+
+        # Also creating and saving this new directory within the current directory
+        netCDF_dir = args.dir + args.dir[args.dir.find("/greenl"):] + "_netCDF"
+        print("netCDF_dir/: " + netCDF_dir)
+        create_directory(netCDF_dir)
         
-        save_resample(plot, x_utm_centers, y_utm_centers, area_new, args.res, name, net_dir)
+        # For the purpose of saving,
+        netCDF_dir = netCDF_dir + "/"
+        save_resample(plot, x_utm_centers, y_utm_centers, area_new, args.res, name, netCDF_dir)
 
 # Below is old
 # (plot, new_area, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers) = resample(grid_nan, vars, args.res, args.test, name)
