@@ -1,7 +1,6 @@
 import numpy as np
 import os
 import glob
-import sys
 import matplotlib.pyplot as plt
 from pyresample import kd_tree, geometry 
 import xarray as xr
@@ -9,6 +8,7 @@ import utm
 import time
 import argparse # For command line interface
 import math
+from datetime import datetime
 
 '''
 This is a resampler for an entire collection of swath data.
@@ -34,23 +34,32 @@ def get_variables(annotation):
         lines = f.readlines()
         idx = 0
         for line in lines:
-            if line.startswith("GRD Latitude Lines"): # Start of data should start at index 62 but checking just in case
-                print(idx) 
+            if line.startswith("GRD Latitude Lines"):
+                print("Ususally 62: " + str(idx)) 
                 startofdata = idx
                 break
             idx += 1
 
+        print("Reading lines to get variables:")
         # Assuming all data is on successive lines and there are 14 data points
         for r in range(14):
             ln = lines[startofdata + r].split()
-            
             # The value will be at the 5th index for the first 6 lines and at the 6th index for the last 8
+            # There is a weird instance where 'x10' mysteriously appears
+            print(ln)
             if r < 6:
-                variables.append(ln[5]) 
+                i = 5
             else:
-                variables.append(ln[6])
+                i = 6
+            print(i)
+            if '\x10' in ln[i]:
+                print('\x10 found in ' + ln[i] + '!')
+                ln[i] = ln[i].replace("\x10", '')
+            variables.append(ln[i])
 
     # Convert the list of "strings" into floats
+    print("Raw input variables:")
+    print(variables)
     variables = list(map(float, variables)) 
 
     vardict =	{
@@ -72,7 +81,9 @@ def get_variables(annotation):
     # lr_lon : variables[13],
     }
 
+    print("Variable dictionary created:")
     print(vardict.values())
+    
     return vardict  
 
 
@@ -80,7 +91,8 @@ def get_variables(annotation):
 # Plots both the original data input and the resampled data
 # May need to change saving locations on other machines
 #
-def plot_and_save(original, xspace, yspace, resampled, resolution, name, path):
+def save_and_show(original, xspace, yspace, resampled, resolution, name, path):
+    print("Saving original and resampled plots")
     start_time = time.time()
     plt.figure(figsize=(10,10));plt.imshow(original, vmin=0, vmax=500, cmap='jet');plt.colorbar()
     print("Original plotting time: --- %s seconds ---" % (time.time() - start_time))
@@ -91,14 +103,19 @@ def plot_and_save(original, xspace, yspace, resampled, resolution, name, path):
     print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
 
     plt.savefig(path + name + "resampled.png")
-    plt.show()
-    print("Plotting complete")
+    print("Save complete")
+    
+    # Show plots for the purpose of checking
+    # plt.show()
+    
 
 
 
 def resample(grid, vardict, area_new, test, resolution):
+    print("Grid shape:")
+    print(grid.shape)
+
     # Assuming data and annotation file have the same name, just different type and contain only one period
-    
     lats = np.linspace(vardict['lat_start'] - 0.5 * vardict['lat_space'], (vardict['lat_start'] - 0.5 * vardict['lat_space']) + (vardict['lat_space'] * (vardict['lat_lines'] + 1)), vardict['lat_lines'] + 1)
     lons = np.linspace(vardict['lon_start'] - 0.5 * vardict['lon_space'], (vardict['lon_start'] - 0.5 * vardict['lon_space']) + (vardict['lon_space'] * (vardict['lon_lines'] + 1)), vardict['lon_lines'] + 1)
 
@@ -108,10 +125,13 @@ def resample(grid, vardict, area_new, test, resolution):
     lons = lons[::test]
     lon_lines = lons.size
     lat_lines = lats.size
-    '''if test is not 1:
-        lon_lines = math.ceil(lon_lines / test)
-        lat_lines = math.ceil(lat_lines / test)
-    '''
+
+    # Original area size and grid size match for test = 100, 
+    # but original area is one greater in both dimensions for test = 1 
+    # Correcting for that difference,
+    if test == 1: # there may be more cases
+        lon_lines = lon_lines - 1
+        lat_lines = lat_lines - 1
 
     #
     # Original Area definition:
@@ -125,16 +145,16 @@ def resample(grid, vardict, area_new, test, resolution):
     area_extent = (vardict['ll_lon'], vardict['ll_lat'], vardict['ur_lon'], vardict['ur_lat'])
     area_original = geometry.AreaDefinition(area_id, description, proj_id, proj_string, width, height, area_extent)
 
+ 
+    print("area_original shape (must match grid shape):")
     print(area_original.shape)
 
-    print("get_lonlats shape:")
-    print(area_new.get_lonlats()[0].shape, area_new.get_lonlats()[1].shape)
 
-    print("area_original shape:")
-    print(area_original.shape)
-    print("Grid shape:")
-    print(grid.shape)
+    # print("get_lonlats shape:")
+    # print(area_new.get_lonlats()[0].shape, area_new.get_lonlats()[1].shape)
 
+    print(datetime.now())
+    print("--- Resampling ---")
     wf = lambda r: 1
     start_time = time.time()
     # Multiplying radius of influence by test to account for skipping data when downsizing
@@ -142,7 +162,7 @@ def resample(grid, vardict, area_new, test, resolution):
     #result = kd_tree.resample_nearest(area_original, grid, area_new, radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), fill_value=np.nan)
 
     print("Result calculation time: --- %s seconds ---" % (time.time() - start_time))
-    print("Result shape:")
+    print("Resulting shape:")
     print(result.shape)
 
     '''
@@ -256,13 +276,23 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.attrs['dx_spacing'] = resolution
     swath.attrs['dy_spacing'] = resolution
     swath.attrs['grid_mapping'] = 'crs'    
-    swath.attrs['no_data'] = -9999.0
-    swath.attrs['srid'] = "urn:ogc:def:crs:EPSG::32624"
+    swath.attrs['no_data'] = np.NaN
+    swath.attrs['srid'] = "urn:ogc:def:crs:" + new_area.proj4_string
     swath.attrs['proj4text'] = new_area.proj4_string
     swath.attrs['Projection'] = new_area.description
-    swath.attrs['proj_id'] = name #new_area.proj_id
+    swath.attrs['proj_id'] = new_area.proj_id
     swath.attrs['Insitution'] = 'JPL'
+    swath.attrs['Mission'] = 'Oceans Melting Greenland'
+    swath.attrs['Mission website'] = 'https://omg.jpl.nasa.gov/portal/'
+    swath.attrs['DOI'] = '10.5067/OMGEV-ICEGA'
+    swath.attrs['Citation'] = 'OMG Mission. 2016. Glacier elevation data from the GLISTIN-A campaigns. Ver. 0.1. OMG SDS, CA, USA. Dataset accessed [YYYY-MM-DD] at http://dx.doi.org/10.5067/OMGEV-ICEGA.'
+    swath.attrs['Mission Citation'] = '10.5670/oceanog.2016.100'
     swath.attrs['author'] = 'Matthew Gonzalgo & Forrest Graham'
+    swath.attrs['Date created'] = str(datetime.now())
+    swath.attrs['Processessing code repository'] = 'https://github.com/matthewGonzalgo/OMG'
+    swath.attrs['Original data source URL'] = 'https://uavsar.jpl.nasa.gov/cgi-bin/data.pl'
+    swath.attrs['File naming convention document'] = 'https://uavsar.jpl.nasa.gov/science/documents/topsar-format.html'
+    swath.attrs['Note on swath ID number'] = 'Started numbers from Cape Farewell and moved counterclockwise around Greenland'
     swath.attrs['nx'] = len(utm_x)-1
     swath.attrs['ny'] = len(utm_y)-1
     swath.attrs['_FillValue'] = np.NaN
@@ -270,14 +300,14 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.attrs['_CoordinateAxisTypes'] = "GeoX GeoY"
 
     swath['x'].attrs['units']='meters'
-    swath['x'].attrs['long_name'] = 'X'
+    swath['x'].attrs['long_name'] = 'X coordinate of grid cell center'
     swath['x'].attrs['coverage_content_type'] = 'coordinate'
     swath['x'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['x'].attrs['axis'] = 'X'
     swath['x'].attrs['valid_range'] = (np.min(utm_x), np.max(utm_x))
 
     swath['y'].attrs['units']='meters'
-    swath['y'].attrs['long_name'] = 'Y'
+    swath['y'].attrs['long_name'] = 'Y coordinate of grid cell center'
     swath['y'].attrs['coverage_content_type'] = 'coordinate'
     swath['y'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['y'].attrs['axis'] = 'Y'
@@ -288,7 +318,7 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.attrs['geospatial_lon_units'] = "degree_east"
     swath.attrs['geospatial_x_units'] = "meters"
     swath.attrs['geospatial_y_units'] = "meters"
-    swath.attrs['geospatial_bounds_crs'] = "EPSG:32624"
+    swath.attrs['geospatial_bounds_crs'] = new_area.proj4_string
     swath.attrs['geospatial_x_resolution'] = str(resolution) + " meters"
     swath.attrs['geospatial_y_resolution'] = str(resolution) + " meters"
     
@@ -298,6 +328,9 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, path):
     swath.to_netcdf(saved)
     print("Swath saved to " + saved)
 
+#
+# Simply creates a directory with the given name
+#
 def create_directory(dirName):
     try:
         # Create target Directory
@@ -308,8 +341,9 @@ def create_directory(dirName):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    start_time = time.time()
 
+    parser = argparse.ArgumentParser()
     #
     # Format for adding an argument:
     # parser.add_argument("-x", "--fullname", action="store", help="comment", default=default value, dest="variable_name",  type=datatype, required=T/F)
@@ -320,6 +354,25 @@ if __name__ == '__main__':
     parser.add_argument("-x", "--suffix", action="store", help="filename suffix", default="", dest="suf",  type=str, required=False)
 
     args = parser.parse_args()
+    
+    # Indicate test runs in their save name
+    if args.test != 1:
+        args.suf = "testing" + str(args.test) + args.suf
+    #
+    # Exception handling
+    #
+    assert os.path.isdir(args.dir), "Directory does not exist"
+    # Checking for proper naming convention
+    assert not args.dir.endswith('/'), "Do not end directory with slash"
+    dir_name = args.dir[args.dir.rfind('/') + 1:]
+    print("dir_name: " + dir_name)
+    assert dir_name.find('greenl_') != -1 or dir_name.find('grland_') != -1, "Bad directory name"
+    print('Good directory')
+
+    assert args.test >= 1, "test must be greater than or equal to 1"
+
+    assert args.res > 0, "resolution must be greater than 0"
+
 
     # Values initially set to max and min to set up initial comparison 
     cornerdict =	{
@@ -329,8 +382,10 @@ if __name__ == '__main__':
         'll_lon' : float('inf')
         }
     os.chdir(args.dir)
+    vardict_dict = {}
     for annotation in glob.glob("*.ann"):
         vardict = get_variables(annotation)
+        vardict_dict.update({annotation : vardict}) # Save vardicts for later going through each grid
         if vardict['ur_lat'] > cornerdict['ur_lat']:
             cornerdict['ur_lat'] = vardict['ur_lat']
 
@@ -344,24 +399,27 @@ if __name__ == '__main__':
             cornerdict['ll_lon'] = vardict['ll_lon']
     print(cornerdict)
 
+    print("--- Creating utm area ---")
     (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells) = create_utms(args.res, \
                                                                                         cornerdict['ll_lat'], \
                                                                                         cornerdict['ll_lon'], \
                                                                                         cornerdict['ur_lat'], \
                                                                                         cornerdict['ur_lon'])
+    print("New utm area created")
 
     tag = str(utm.from_latlon(cornerdict['ll_lat'], cornerdict['ll_lon'])[2])
     print("Tag: " + tag)
 
-    # Assumes the directory is named the appropriate swath set
-    id = args.dir[args.dir.find('greenl'):]
-    print("ID: " + id)
+    # Gets name of directory
+    swath_id = args.dir[args.dir.rfind('/') + 1:4]
+    swath_directory_name = args.dir[args.dir.rfind('/') + 1:]
+    print("Swath directory name: " + swath_directory_name)
     #
     # New Area definition we have defined for the swath (all years):
     #
-    area_id_new = 'WGS84'
-    description_new = 'UTM ' + tag + "N"
-    proj_id_new = id + '_new'
+    area_id_new = 'WGS84 / UTMzone ' + tag + 'N'
+    description_new = 'UTM ' + tag + 'N ' + swath_directory_name
+    proj_id_new = area_id_new
     proj_string_new = 'EPSG:326' + tag
     width_new = n_xcells
     height_new = n_ycells
@@ -380,37 +438,43 @@ if __name__ == '__main__':
     xx, yy = np.meshgrid(x_utm_corners, y_utm_corners)
 
     for grd in glob.glob('*.grd'):
-        print(grd)
+        print("Swath data grd file name: " + grd)
+        # 
+        # Some swaths have different numbers in different years because they had different headings,
+        # so can't assume the directory must match the file names. Instead assume the files are
+        # located in the proper directory.
+        #
+ 
         g = np.fromfile(grd, dtype = '<f4')
 
         ann = grd[:grd.find(".")] + '.ann'
-        vdict = get_variables(ann)       
+        vdict = vardict_dict.get(ann)       
 
         grid = np.reshape(g, (vdict['lat_lines'], vdict['lon_lines']))
-
-        print(grid.min()) # Should be -10000.0
+        print('Min value, usually -10000.0: ' + str(grid.min())) 
         grid_nan = np.where(grid > grid.min(), grid, np.nan)
 
 
         print("Annotation:" + annotation)
-        name = str(args.res) + "m_" + grd[grd.find("greenl"):grd.find(".")] + args.suf
-        print("Name: " + name)
+        n = grd[grd.rfind('/') + 1:grd.find(".")]
+        print("Name: " + n)
+        name = str(args.res) + "m_" + n + args.suf
+        print("Modified name: " + name)
 
         # Creating and saving this new directory within the current directory of data
-        fig_dir = args.dir + args.dir[args.dir.find("/greenl"):] + "_plots"
+        fig_dir = args.dir + args.dir[args.dir.rfind("/"):] + "_plots"
         print("fig_dir: " + fig_dir)
         create_directory(fig_dir)
 
-
-        plot = resample(grid_nan, get_variables(ann), area_new, args.test, args.res)
+        plot = resample(grid_nan, vdict, area_new, args.test, args.res)
 
         # For the purpose of saving,
         fig_dir = fig_dir + "/"
         print("fig_dir/: " + fig_dir)
-        plot_and_save(grid_nan, xx, yy, plot, args.res, name, fig_dir)
+        save_and_show(grid_nan, xx, yy, plot, args.res, name, fig_dir)
 
         # Also creating and saving this new directory within the current directory
-        netCDF_dir = args.dir + args.dir[args.dir.find("/greenl"):] + "_netCDF"
+        netCDF_dir = args.dir + args.dir[args.dir.rfind("/"):] + "_netCDF"
         print("netCDF_dir/: " + netCDF_dir)
         create_directory(netCDF_dir)
         
@@ -422,5 +486,5 @@ if __name__ == '__main__':
 # (plot, new_area, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers) = resample(grid_nan, vars, args.res, args.test, name)
 
 # save_resample(plot, x_utm_centers, y_utm_centers, new_area, args.res, name, args.save)
-
-    print("Done")
+    print("Total runtime of multiresampler: --- %s seconds ---" % (time.time() - start_time))
+    print("Done!")
