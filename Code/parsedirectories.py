@@ -80,8 +80,12 @@ def hewa_download(user, saveto, file_name):
     print("grid file: " + grd)
 
     start_time = time.time()
-    os.system("scp " + user + "@hewa://project/glistin/data/" + file_name + "/" + ann + " " + saveto)
+    #os.system("scp " + user + "@hewa://project/glistin/data/" + file_name + "/" + ann + " " + saveto)
     #os.system("scp " + user + "@hewa://project/glistin/data/" + file_name + "/" + grd + " " + saveto)
+    
+    os.system("rsync -auvz " + user + "@hewa://project/glistin/data/" + file_name + "/" + ann + " " + saveto)
+    os.system("rsync -auvz " + user + "@hewa://project/glistin/data/" + file_name + "/" + grd + " " + saveto)
+    
     print("Download runtime: --- %s seconds ---" % (time.time() - start_time))
 
     '''
