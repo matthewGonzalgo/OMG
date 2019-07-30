@@ -9,6 +9,7 @@ import time
 import argparse # For command line interface
 import math
 from datetime import datetime
+from createdirectories import create_directory
 
 '''
 This is a resampler for an entire collection of swath data.
@@ -377,17 +378,6 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     saved = save_path + name + ".nc"
     swath.to_netcdf(saved)
     print("Swath saved to " + saved + "\n")
-
-#
-# Simply creates a directory with the given name
-#
-def create_directory(dirName):
-    try:
-        # Create target Directory
-        os.mkdir(dirName)
-        print("Directory " , dirName ,  " Created ") 
-    except FileExistsError:
-        print("Directory " , dirName ,  " already exists")
 
 def max_area(directory):
     # Values initially set to max and min to set up initial comparison 
