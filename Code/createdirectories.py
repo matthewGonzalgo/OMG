@@ -8,6 +8,7 @@ import os
 # Simply creates a directory with the given name
 #
 def create_directory(dirName):
+    print ('creating directory ', dirName)
     try:
         # Create target Directory
         os.mkdir(dirName)

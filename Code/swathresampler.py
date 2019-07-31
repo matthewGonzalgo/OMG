@@ -10,6 +10,7 @@ import argparse # For command line interface
 import math
 from datetime import datetime
 from createdirectories import create_directory
+import copy as copy
 
 '''
 This is a resampler for an entire collection of swath data.
@@ -98,30 +99,111 @@ def get_variables(annotation):
 def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, name, save_path):
     print("Saving original and resampled plots")
     start_time = time.time()
-    plt.figure(figsize=(10,10));plt.imshow(original, vmin=0, vmax=500, cmap='jet');plt.colorbar()
+
+    fig_max_points_on_one_side = 2000
+
+
+    ## plot original data   
+
+    ### calculate how many indices to skip
+    nx_orig = original.shape[0]
+    ny_orig = original.shape[1]
+
+    skip_x_orig = np.ceil(nx_orig / fig_max_points_on_one_side)
+    skip_y_orig = np.ceil(ny_orig / fig_max_points_on_one_side)
+    print('original  skip x y: ', skip_x_orig, skip_y_orig)
+    skip_orig = int(np.maximum(skip_x_orig, skip_y_orig))
+    print('original skipping: ', skip_orig)
+
+    ### imshow
+
+    plt.figure(figsize=(10,10));
+    
+    if skip_orig > 1:
+        plt.imshow(original[::skip_orig, ::skip_orig],vmin=0, vmax=500, cmap='jet'); \
+        plt.title('Original data [skipping every ' + str(skip_orig) + ' cells]')
+    else:
+        plt.imshow(original, vmin=0, vmax=500, cmap='jet')
+        plt.title('Original data')
+        
+    plt.colorbar()
     print("Original plotting time: --- %s seconds ---" % (time.time() - start_time))
-    plt.savefig(save_path + name + "original.png")
+    plt.savefig(save_path + name + "original_array.png")
     print('Saved original')
 
+
+    ### pcolormesh
+
     start_time = time.time()
-    plt.figure(figsize=(10, 10));plt.pcolormesh(lons, lats, original);plt.colorbar();plt.grid()
+    plt.figure(figsize=(10, 10));
+    if skip_orig > 1:
+        plt.pcolormesh(lons[::skip_orig], \
+                       lats[::skip_orig], \
+                   original[::skip_orig, ::skip_orig], vmin=0, vmax=500, cmap='jet');
+        plt.title('Original data [skipping every ' + str(skip_orig) + ' cells]')
+    else:
+        plt.pcolormesh(lons, lats, original, vmin=0, vmax=500, cmap='jet');
+        plt.title('Original data')
+    
+    plt.colorbar();plt.grid()
     print("Original latlon plotting time: --- %s seconds ---" % (time.time() - start_time))
 
-    plt.savefig(save_path + name + "original_latlon.png")
+    plt.savefig(save_path + name + "original_mapped.png")
     print('Saved original latlon')
 
+    ## Plot Resampled Data
+    ### calculate how many indices to skip
+    
+    nx_resampled = resampled.shape[0]
+    ny_resampled = resampled.shape[1]
+
+    skip_x_resampled = np.ceil(nx_resampled / fig_max_points_on_one_side)
+    skip_y_resampled = np.ceil(ny_resampled / fig_max_points_on_one_side)
+    print('resampled  skip x y: ', skip_x_resampled, skip_y_resampled)
+    skip_resampled = int(np.maximum(skip_x_resampled, skip_y_resampled))
+    print('resampled skipping: ', skip_resampled)
+
     start_time = time.time()
-    plt.figure(figsize=(10, 10));plt.pcolormesh(xspace, yspace, resampled);plt.colorbar();plt.grid()
+
+    ### imshow
+
+    plt.figure(figsize=(10, 10));
+
+    if skip_resampled > 1:
+        plt.imshow(resampled[::skip_resampled, ::skip_resampled], \
+                vmin=0, vmax=500, cmap='jet', origin='lower');
+        plt.title('resampled data [skipping every ' + str(skip_resampled) + ' cells]')
+    else:
+        plt.imshow(resampled, \
+            vmin=0, vmax=500, cmap='jet', origin='lower');
+        plt.title('resampled data')
+        
+    plt.colorbar();plt.grid()
     print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
-    plt.savefig(save_path + name + "resampled.png")
+    plt.savefig(save_path + name + "resampled_array.png")
+    print('Saved resampled')
+
+    ### pcolormesh
+    
+    plt.figure(figsize=(10, 10));
+
+    if skip_resampled > 1:
+        plt.pcolormesh(xspace[::skip_resampled, ::skip_resampled],\
+                       yspace[::skip_resampled, ::skip_resampled],\
+                    resampled[::skip_resampled, ::skip_resampled],vmin=0, vmax=500, cmap='jet');
+        plt.title('resampled data [skipping every ' + str(skip_resampled) + ' cells]')
+    else:
+        plt.pcolormesh(xspace, yspace, resampled, vmin=0, vmax=500, cmap='jet');
+        plt.title('resampled data')
+        
+    plt.colorbar();plt.grid()
+    print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
+    plt.savefig(save_path + name + "resampled_mapped.png")
     print('Saved resampled')
 
     print("Save complete\n")
     
-    # Show plots for the purpose of checking
-    # plt.show()
     
-
 
 def make_latlon_edges(lat_start, lon_start, lat_space, lon_space, lat_lines, lon_lines):
     # Area def uses edges
@@ -155,33 +237,47 @@ def resample(grid, annotation, vardict, lat_centers, lon_centers, area_new, test
     #width = num_grid_columns
     #height = num_grid_rows 
 
+    area_id = 'WGS84'
+    description = 'lat-lon'
+    proj_string = 'proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
+    proj_id = 'EPSG:4326'
+    width  = np.shape(lon_centers)[0]
+    height = np.shape(lat_centers)[0]
 
-    # Hack to deal with two cases: west/east on first column 
-    #if vardict['ll_lon'] > vardict['ur_lon']:
-    #area_extent = (lon_edges_l[0], lat_edges_b[0], lon_edges_r[-1], lat_edges_t[-1])
-    #else:   
-    #    area_extent = (vardict['ll_lon'], vardict['ur_lat'], vardict['ur_lon'], vardict['ll_lat'])
-        
-    #area_original = geometry.AreaDefinition(area_id, description, proj_id, proj_string, width, height, area_extent)
+    print(lon_centers[0], lat_centers[-1], lon_centers[0], lat_centers[0])
 
+    # define the area_extent as [min_lon, min_lat, max_lon, max_lat]
     
-    #print("area_original shape (must match grid shape):")
-    #print(area_original.shape)
-
-    lon_centers_xx, lat_centers_xx = np.meshgrid(lon_centers, lat_centers);
-    area_original = geometry.SwathDefinition(lons=lon_centers_xx, lats=lat_centers_xx)
+    ## if the last lat value is smaller than the first lat value, then we have to switch
+    ## which lat value to use when defining area_extent
+    if lat_centers[-1] < lat_centers[0]:
+        area_extent = (lon_centers[0], lat_centers[-1], lon_centers[-1], lat_centers[0])
     
-    # print("get_lonlats shape:")
-    # print(area_new.get_lonlats()[0].shape, area_new.get_lonlats()[1].shape)
+    ## if the last lat value is smaller than the first lat value, then we have to switch
+    ## which lat value to use when defining area_extent
+    else:
+        area_extent = (lon_centers[0], lat_centers[0], lon_centers[-1], lat_centers[-1])
+
+    area_original = geometry.AreaDefinition(area_id, description, \
+        proj_id, proj_string, width, height, area_extent)
 
     print(datetime.now())
     print("--- Resampling ---")
     wf = lambda r: 1
     start_time = time.time()
+    
     # Multiplying radius of influence by test to account for skipping data when downsizing
-    result = kd_tree.resample_custom(area_original, grid, area_new, radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), fill_value=np.nan, weight_funcs=wf)
-    #result = kd_tree.resample_nearest(area_original, grid, area_new, radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), fill_value=np.nan)
+    result = kd_tree.resample_custom(area_original, grid, area_new, \
+        radius_of_influence=test * math.sqrt(2 * (resolution / 2)**2), \
+        fill_value=np.nan, weight_funcs=wf)
 
+    ## if the last lat value is smaller than the first lat value, then we have to flip 
+    ## the result in the up/down direction (rows)
+    
+    if lat_centers[-1] < lat_centers[0]:
+        result = np.flipud(result)
+
+    
     print("Result calculation time: --- %s seconds ---" % (time.time() - start_time))
     print("Resulting shape:")
     print(result.shape)
@@ -312,28 +408,33 @@ def create_utms(resolution, max_lat, max_lon, min_lat, min_lon):
 #
 def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path):
     new_grid_lon, new_grid_lat = new_area.get_lonlats()
+
+
     swath = xr.Dataset( \
-    {'elevation': (['y','x'], resampled)}, \
-    coords = {'y': utm_y, \
-    'x': utm_x, \
-    'longitude': (('y','x'), new_grid_lon), \
-    'latitude' : (('y','x'), new_grid_lat)})
+            {'elevation': (['y','x'], resampled)}, \
+            coords = {'y': utm_y, \
+                      'x': utm_x, \
+                      'longitude': (('y','x'), new_grid_lon), \
+                      'latitude' : (('y','x'), new_grid_lat)})
 
     
+    print ('SAVING .... ')
+    print ('new area : ')
+    print (new_area)
 
     swath.elevation.attrs['description'] = name
     swath.elevation.attrs['units'] = 'meters'
 
-    swath.attrs['xmin'] = np.min(utm_x)
-    swath.attrs['ymax'] = np.max(utm_y)
-    swath.attrs['dx_spacing'] = resolution
-    swath.attrs['dy_spacing'] = resolution
-    swath.attrs['grid_mapping'] = 'crs'    
+    swath.attrs['xmin'] = int(np.min(utm_x))
+    swath.attrs['ymax'] = int(np.max(utm_y))
+    swath.attrs['spacing'] = int(resolution)
+    #swath.attrs['grid_mapping'] = 'crs'    
     swath.attrs['no_data'] = np.NaN
-    swath.attrs['srid'] = "urn:ogc:def:crs:" + new_area.proj4_string
+    #swath.attrs['srid'] = "urn:ogc:def:crs:" + new_area.proj4_string
     swath.attrs['proj4text'] = new_area.proj4_string
+    swath.attrs['proj4string'] = new_area.proj4_string
     swath.attrs['Projection'] = new_area.description
-    swath.attrs['proj_id'] = new_area.proj_id
+    swath.attrs['proj4'] = new_area.proj_id
     swath.attrs['Insitution'] = 'JPL'
     swath.attrs['Mission'] = 'Oceans Melting Greenland'
     swath.attrs['Mission website'] = 'https://omg.jpl.nasa.gov/portal/'
@@ -352,15 +453,15 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.attrs['_CoordinateTransformType'] = "Projection"
     swath.attrs['_CoordinateAxisTypes'] = "GeoX GeoY"
 
-    swath['x'].attrs['units']='meters'
-    swath['x'].attrs['long_name'] = 'X coordinate of grid cell center'
+    swath['x'].attrs['units']='meter'
+    swath['x'].attrs['long_name'] = "Cartesian x-coordinate";
     swath['x'].attrs['coverage_content_type'] = 'coordinate'
     swath['x'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['x'].attrs['axis'] = 'X'
     swath['x'].attrs['valid_range'] = (np.min(utm_x), np.max(utm_x))
 
-    swath['y'].attrs['units']='meters'
-    swath['y'].attrs['long_name'] = 'Y coordinate of grid cell center'
+    swath['y'].attrs['units']='meter'
+    swath['y'].attrs['long_name'] =  "Cartesian y-coordinate";
     swath['y'].attrs['coverage_content_type'] = 'coordinate'
     swath['y'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['y'].attrs['axis'] = 'Y'
@@ -381,6 +482,52 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.to_netcdf(saved)
     print("Swath saved to " + saved + "\n")
 
+
+
+def remove_outliers(data, block_size, z_max):
+    nr = data.shape[0]
+    nc = data.shape[1]    
+    
+    num_blocks_c = int(np.ceil(nc / block_size))
+    num_blocks_r = int(np.ceil(nr / block_size))
+    
+    print(nr, nc, num_blocks_r, num_blocks_c)
+    
+    data_new = np.zeros(data.shape)*np.nan
+    
+    for bc in range(num_blocks_c):
+        startc = (bc)*block_size
+        endc   = (bc+1  )*block_size
+        endc   = np.minimum(endc, nc)
+        
+        for br in range(num_blocks_r):
+            startr = (br)*block_size
+            endr   = (br+1  )*block_size
+            endr = np.minimum(endr, nr)
+            
+            #print (bc, br, startc, endc, startr, endr)
+
+            tmp_data = data[startr:endr, startc:endc]
+            num_not_nan = np.count_nonzero(~np.isnan(tmp_data.ravel()))
+            
+            # require at least 20 not nan points here.
+            if num_not_nan > 20:
+                tmp_mean = np.nanmean(tmp_data)
+                tmp_std  = np.nanstd(tmp_data)
+
+                if np.abs(tmp_mean) > 0 and tmp_std > 0:
+                    tmp_z    = (tmp_data - tmp_mean) / tmp_std
+                
+                    tmp_data_clean = np.where(np.abs(tmp_z) < z_max, tmp_data, np.nan)
+                    data_new[startr:endr, startc:endc] = tmp_data_clean
+                else:
+                    data_new[startr:endr, startc:endc] = tmp_data
+            else:
+                data_new[startr:endr, startc:endc] = tmp_data
+
+    return data_new
+
+
 def max_area(directory):
     # Values initially set to max and min to set up initial comparison 
     max_area_dict =	{
@@ -389,6 +536,7 @@ def max_area(directory):
         'min_lat' : float('inf'),
         'min_lon' : float('inf')
         }
+
     os.chdir(directory)
     vardict_dict = {}
     for annotation in glob.glob("*.ann"):
@@ -453,11 +601,12 @@ if __name__ == '__main__':
 
     max_area_dict, vardict_dict = max_area(args.dir)
     
-    (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells) = create_utms(args.res, \
-                                                                                        max_area_dict['max_lat'], \
-                                                                                        max_area_dict['max_lon'], \
-                                                                                        max_area_dict['min_lat'], \
-                                                                                        max_area_dict['min_lon'])
+    (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, \
+        n_xcells, n_ycells) = create_utms(args.res, \
+                                max_area_dict['max_lat'], \
+                                max_area_dict['max_lon'], \
+                                max_area_dict['min_lat'], \
+                                max_area_dict['min_lon'])
 
 
     tag = str(utm.from_latlon(max_area_dict['max_lat'], max_area_dict['min_lon'])[2])
@@ -472,10 +621,22 @@ if __name__ == '__main__':
     #
     area_id_new = 'WGS84 / UTMzone ' + tag + 'N'
     description_new = 'UTM ' + tag + 'N ' + swath_directory_name
-    proj_id_new = area_id_new
+    proj_id_new = "+init=epsg:326" + tag;
     proj_string_new = '+proj=utm +zone=' + str(tag) + ' +ellps=WGS84 +datum=WGS84 +units=m +no_defs' 
     width_new = n_xcells
     height_new = n_ycells
+
+    area_extent_new = (x_utm_corners[0], y_utm_corners[0], \
+        x_utm_corners[-1], y_utm_corners[-1]) # may need to revisit
+
+    area_new = geometry.AreaDefinition(area_id_new, description_new, \
+        proj_id_new, proj_string_new, width_new, height_new, area_extent_new)
+
+    print("New area:")
+    print(area_new)
+    print("New area shape:")
+    print(area_new.shape)
+   
 
     print(width_new)
     print(height_new)
@@ -483,12 +644,6 @@ if __name__ == '__main__':
     print('(x_utm_corners[0], y_utm_corners[0], x_utm_corners[-1], y_utm_corners[-1])')
     print(x_utm_corners[0], y_utm_corners[0], x_utm_corners[-1], y_utm_corners[-1])
 
-    area_extent_new = (x_utm_corners[0], y_utm_corners[0], x_utm_corners[-1], y_utm_corners[-1]) # may need to revisit
-    area_new = geometry.AreaDefinition(area_id_new, description_new, proj_id_new, proj_string_new, width_new, height_new, area_extent_new)
-
-    print("New area shape:")
-    print(area_new.shape)
-   
 
     # For data plotting
     xx, yy = np.meshgrid(x_utm_corners, y_utm_corners)
@@ -507,10 +662,25 @@ if __name__ == '__main__':
         vdict = vardict_dict.get(ann)       
 
         grid = np.reshape(g, (vdict['lat_lines'], vdict['lon_lines']))
+
+        # first remove points that are known bad data.  Here, anything less than 1000m
+        # is definitely bad.
+
+        bad_data_flag = -1000
+
         print('Min value, usually -10000.0: ' + str(grid.min())) 
-        grid_nan = np.where(grid > grid.min(), grid, np.nan)
+        grid_nan = np.where(grid > bad_data_flag, grid, np.nan)
 
+        # now scan through the data are remove outliers.
+        # pull out blocks of block_size x block_size, and remove points that are 
+        # more than z_max standard deviations from the mean within that block
+        block_size = 300
+        z_max = 5
+        print ('... removing outliers ', str(block_size), str(z_max))
+        grid_remove_outliers = remove_outliers(grid_nan, block_size, z_max)
 
+        grid = grid_remove_outliers
+        
         print("Annotation:" + ann)
         n = grd[grd.rfind('/') + 1:grd.find(".")]
         print("Name: " + n)
@@ -519,19 +689,33 @@ if __name__ == '__main__':
 
         
     
-        lat_edges, lon_edges = make_latlon_edges(vdict['lat_start'], vdict['lon_start'], vdict['lat_space'], vdict['lon_space'], vdict['lat_lines'], vdict['lon_lines'])
+        lat_edges, lon_edges = make_latlon_edges(vdict['lat_start'], \
+            vdict['lon_start'], vdict['lat_space'], vdict['lon_space'], \
+            vdict['lat_lines'], vdict['lon_lines'])
+
         print('lat_edges[0], lon_edges[0], lat_edges[-1], lon_edges[-1]')
         print(lat_edges[0], lon_edges[0], lat_edges[-1], lon_edges[-1])
         
-        lat_centers, lon_centers = make_latlon_centers(vdict['lat_start'], vdict['lon_start'], vdict['lat_space'], vdict['lon_space'], vdict['lat_lines'], vdict['lon_lines'])
-        #grid_nan, lat_centers, lon_centers = downsize(grid_nan, lat_centers, lat_centers, args.test)
-        grid_nan, lat_centers, lon_centers, lat_edges_b, lon_edges_l, lat_edges_t, lon_edges_r = \
-            downsize(grid_nan, lat_edges, lon_edges, lat_centers, lon_centers, args.test)
+        lat_centers, lon_centers = make_latlon_centers(vdict['lat_start'], \
+            vdict['lon_start'], vdict['lat_space'], vdict['lon_space'], \
+            vdict['lat_lines'], vdict['lon_lines'])
+
+        grid, lat_centers, lon_centers, lat_edges_b, lon_edges_l, lat_edges_t, lon_edges_r = \
+            downsize(grid, lat_edges, lon_edges, lat_centers, lon_centers, args.test)
         
-        plot = resample(grid_nan, ann, vdict, lat_centers, lon_centers, area_new, args.test, args.res)
+
+
+
+        print('lat_centers[0], lat_centers[-1], lon_centers[0], lon_centers[-1]')
+        print(lat_centers[0], lat_centers[-1], lon_centers[0], lon_centers[-1])
+
+        plot = resample(grid, ann, vdict, lat_centers, lon_centers,\
+                         area_new, args.test, args.res)
 
 
         # Creating and saving this new directory within the current directory of data
+        create_directory(args.save_dir)
+
         fig_dir = args.save_dir + args.dir[args.dir.rfind("/"):] + "_plots"
         print("fig_dir: " + fig_dir)
         create_directory(fig_dir)
@@ -540,7 +724,7 @@ if __name__ == '__main__':
         fig_dir = fig_dir + "/"
         print("fig_dir/: " + fig_dir)
         
-        save_and_show(grid_nan, xx, yy, lat_centers, lon_centers, plot, args.res, name, fig_dir)
+        save_and_show(grid, xx, yy, lat_centers, lon_centers, plot, args.res, name, fig_dir)
 
         # Also creating and saving this new directory within the current directory
         netCDF_dir = args.save_dir + args.dir[args.dir.rfind("/"):] + "_netCDF"
@@ -550,9 +734,6 @@ if __name__ == '__main__':
         # For the purpose of saving,
         netCDF_dir = netCDF_dir + "/"
         save_resample(plot, x_utm_centers, y_utm_centers, area_new, args.res, name, netCDF_dir)
-
-# Below is old
-# (plot, new_area, x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers) = resample(grid_nan, vars, args.res, args.test, name)
 
 # save_resample(plot, x_utm_centers, y_utm_centers, new_area, args.res, name, args.save)
     print("Total runtime of multiresampler: --- %s seconds ---" % (time.time() - start_time))
