@@ -137,7 +137,7 @@ def make_latlon_centers(lat_start, lon_start, lat_space, lon_space, lat_lines, l
 
     return lat_centers, lon_centers
 
-def resample(grid, annotation, vardict, lat_edges_b, lon_edges_l, lat_edges_t, lon_edges_r, area_new, test, resolution):
+def resample(grid, annotation, vardict, lat_centers, lon_centers, area_new, test, resolution):
     print("Grid shape:")
     print(grid.shape)
 
@@ -148,27 +148,29 @@ def resample(grid, annotation, vardict, lat_edges_b, lon_edges_l, lat_edges_t, l
     #
     # Original Area definition:
     #
-    area_id = 'WGS84'
-    description = 'lat-lon'
-    proj_id = annotation[annotation.find("gr"):annotation.find(".")]
-    proj_string = 'EPSG:4326'
-    width = num_grid_columns
-    height = num_grid_rows 
+    #area_id = 'WGS84'
+    #description = 'lat-lon'
+    #proj_id = annotation[annotation.find("gr"):annotation.find(".")]
+    #proj_string = 'EPSG:4326'
+    #width = num_grid_columns
+    #height = num_grid_rows 
 
 
     # Hack to deal with two cases: west/east on first column 
     #if vardict['ll_lon'] > vardict['ur_lon']:
-    area_extent = (lon_edges_l[0], lat_edges_b[0], lon_edges_r[-1], lat_edges_t[-1])
+    #area_extent = (lon_edges_l[0], lat_edges_b[0], lon_edges_r[-1], lat_edges_t[-1])
     #else:   
     #    area_extent = (vardict['ll_lon'], vardict['ur_lat'], vardict['ur_lon'], vardict['ll_lat'])
         
-    area_original = geometry.AreaDefinition(area_id, description, proj_id, proj_string, width, height, area_extent)
+    #area_original = geometry.AreaDefinition(area_id, description, proj_id, proj_string, width, height, area_extent)
 
- 
-    print("area_original shape (must match grid shape):")
-    print(area_original.shape)
+    
+    #print("area_original shape (must match grid shape):")
+    #print(area_original.shape)
 
-
+    lon_centers_xx, lat_centers_xx = np.meshgrid(lon_centers, lat_centers);
+    area_original = geometry.SwathDefinition(lons=lon_centers_xx, lats=lat_centers_xx)
+    
     # print("get_lonlats shape:")
     # print(area_new.get_lonlats()[0].shape, area_new.get_lonlats()[1].shape)
 
@@ -471,7 +473,7 @@ if __name__ == '__main__':
     area_id_new = 'WGS84 / UTMzone ' + tag + 'N'
     description_new = 'UTM ' + tag + 'N ' + swath_directory_name
     proj_id_new = area_id_new
-    proj_string_new = 'EPSG:326' + tag
+    proj_string_new = '+proj=utm +zone=' + str(tag) + ' +ellps=WGS84 +datum=WGS84 +units=m +no_defs' 
     width_new = n_xcells
     height_new = n_ycells
 
@@ -525,7 +527,8 @@ if __name__ == '__main__':
         #grid_nan, lat_centers, lon_centers = downsize(grid_nan, lat_centers, lat_centers, args.test)
         grid_nan, lat_centers, lon_centers, lat_edges_b, lon_edges_l, lat_edges_t, lon_edges_r = \
             downsize(grid_nan, lat_edges, lon_edges, lat_centers, lon_centers, args.test)
-        plot = resample(grid_nan, ann, vdict, lat_edges_b, lon_edges_l, lat_edges_t, lon_edges_r, area_new, args.test, args.res)
+        
+        plot = resample(grid_nan, ann, vdict, lat_centers, lon_centers, area_new, args.test, args.res)
 
 
         # Creating and saving this new directory within the current directory of data
