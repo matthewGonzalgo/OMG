@@ -409,15 +409,26 @@ def create_utms(resolution, max_lat, max_lon, min_lat, min_lon):
 def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path):
     new_grid_lon, new_grid_lat = new_area.get_lonlats()
 
+    print ('NGLAT 0/-1 ')
+    print (new_grid_lat[0,0], new_grid_lat[-1,0])
+    print ('NGLON 0/-1 ')
+    print (new_grid_lon[0,0], new_grid_lon[-1,0])
 
-    swath = xr.Dataset( \
-            {'elevation': (['y','x'], resampled)}, \
-            coords = {'y': utm_y, \
-                      'x': utm_x, \
-                      'longitude': (('y','x'), new_grid_lon), \
-                      'latitude' : (('y','x'), new_grid_lat)})
+    # another manifestation of the orientation problem
+    if new_grid_lat[0,0] > new_grid_lat[-1,0]:
+        new_grid_lat = np.flipud(new_grid_lat)
 
-    
+    #da = xr.DataArray(g, dims= ('lat','lon'), coords={'lat': lat, 'lon': lon})
+    swath = xr.DataArray(resampled, \
+                dims = ('y','x'), \
+                coords = {'y': utm_y, \
+                          'x': utm_x, \
+                          'lon': (('y','x'), new_grid_lon), \
+                          'lat': (('y','x'), new_grid_lat)})
+
+    swath.name = 'elevation'
+    swath = swath.to_dataset()
+
     print ('SAVING .... ')
     print ('new area : ')
     print (new_area)
