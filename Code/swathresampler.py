@@ -15,7 +15,7 @@ import copy as copy
 '''
 This is a resampler for an entire collection of swath data.
 The main argument is the directory containing all the years data for a given swath
-Assumes the directory and file names are consistent with the 'greenl' naming convention
+Assumes the directory and file names are consistent with the 'greenl' 'grland' naming convention
 Store data array from data file
 Parse all annotation files in a given directory for number of longitude and latitude lines, starting longitude and latitude for area extent, and spacing
 Keep track of the largest longitude and latitude bounds based on the corners
@@ -400,6 +400,17 @@ def create_utms(resolution, max_lat, max_lon, min_lat, min_lon):
     print("utm arrays created\n")
     return (x_utm_corners, y_utm_corners, x_utm_centers, y_utm_centers, n_xcells, n_ycells)
 
+# 
+# Function for finding the nth occurence of a string.
+# This is used to easily get the year collected from the name in save_resample.
+# Could potentially be used elsewhere in the script.
+# 
+def find_nth(haystack, needle, n):
+    start = haystack.find(needle)
+    while start >= 0 and n > 1:
+        start = haystack.find(needle, start+len(needle))
+        n -= 1
+    return start
 
 #
 # Saves resampled swath data in netCDF format using xarray
@@ -417,10 +428,23 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
                       'longitude': (('y','x'), new_grid_lon), \
                       'latitude' : (('y','x'), new_grid_lat)})
 
-    
+
     print ('SAVING .... ')
     print ('new area : ')
     print (new_area)
+
+    # 
+    # Based on the naming convention we defined, the date that the 
+    # swath was collected comes after the 5th underscore and ends
+    # before the 6th underscore.
+    # The year as well as the specific date will be saved as a swath attributes.
+    #
+    date_collected = name[find_nth(name, '_', 5) + 1:find_nth(name, '_', 6)]
+    print('data collected : ')
+    print(date_collected)
+    year_collected = date_collected[0:2]
+    day_collected = date_collected[2:4]
+    month_collected = date_collected[4:6]
 
     swath.elevation.attrs['description'] = name
     swath.elevation.attrs['units'] = 'meters'
@@ -435,6 +459,8 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.attrs['proj4string'] = new_area.proj4_string
     swath.attrs['Projection'] = new_area.description
     swath.attrs['proj4'] = new_area.proj_id
+    swath.attrs['Year collected'] = 2000 + int(year_collected)
+    swath.attrs['Date collected (day/month/year)'] = day_collected + '/' + month_collected + '/' + year_collected
     swath.attrs['Insitution'] = 'JPL'
     swath.attrs['Mission'] = 'Oceans Melting Greenland'
     swath.attrs['Mission website'] = 'https://omg.jpl.nasa.gov/portal/'
