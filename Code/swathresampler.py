@@ -117,7 +117,7 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
 
     ### imshow
 
-    plt.figure(figsize=(10,10));
+    plt.figure(figsize=(10,10))
     
     if skip_orig > 1:
         plt.imshow(original[::skip_orig, ::skip_orig],vmin=0, vmax=500, cmap='jet'); \
@@ -135,14 +135,14 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
     ### pcolormesh
 
     start_time = time.time()
-    plt.figure(figsize=(10, 10));
+    plt.figure(figsize=(10, 10))
     if skip_orig > 1:
         plt.pcolormesh(lons[::skip_orig], \
                        lats[::skip_orig], \
-                   original[::skip_orig, ::skip_orig], vmin=0, vmax=500, cmap='jet');
+                   original[::skip_orig, ::skip_orig], vmin=0, vmax=500, cmap='jet')
         plt.title('Original data [skipping every ' + str(skip_orig) + ' cells]')
     else:
-        plt.pcolormesh(lons, lats, original, vmin=0, vmax=500, cmap='jet');
+        plt.pcolormesh(lons, lats, original, vmin=0, vmax=500, cmap='jet')
         plt.title('Original data')
     
     plt.colorbar();plt.grid()
@@ -167,15 +167,15 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
 
     ### imshow
 
-    plt.figure(figsize=(10, 10));
+    plt.figure(figsize=(10, 10))
 
     if skip_resampled > 1:
         plt.imshow(resampled[::skip_resampled, ::skip_resampled], \
-                vmin=0, vmax=500, cmap='jet', origin='lower');
+                vmin=0, vmax=1500, cmap='jet', origin='lower')
         plt.title('resampled data [skipping every ' + str(skip_resampled) + ' cells]')
     else:
         plt.imshow(resampled, \
-            vmin=0, vmax=500, cmap='jet', origin='lower');
+            vmin=0, vmax=1500, cmap='jet', origin='lower')
         plt.title('resampled data')
         
     plt.colorbar();plt.grid()
@@ -185,15 +185,15 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
 
     ### pcolormesh
     
-    plt.figure(figsize=(10, 10));
+    plt.figure(figsize=(10, 10))
 
     if skip_resampled > 1:
         plt.pcolormesh(xspace[::skip_resampled, ::skip_resampled],\
                        yspace[::skip_resampled, ::skip_resampled],\
-                    resampled[::skip_resampled, ::skip_resampled],vmin=0, vmax=500, cmap='jet');
+                    resampled[::skip_resampled, ::skip_resampled],vmin=0, vmax=1500, cmap='jet')
         plt.title('resampled data [skipping every ' + str(skip_resampled) + ' cells]')
     else:
-        plt.pcolormesh(xspace, yspace, resampled, vmin=0, vmax=500, cmap='jet');
+        plt.pcolormesh(xspace, yspace, resampled, vmin=0, vmax=1500, cmap='jet')
         plt.title('resampled data')
         
     plt.colorbar();plt.grid()
@@ -452,7 +452,7 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     # The year as well as the specific date will be saved as a swath attributes.
     #
     date_collected = name[find_nth(name, '_', 5) + 1:find_nth(name, '_', 6)]
-    print('data collected : ')
+    print('date collected : ')
     print(date_collected)
     year_collected = date_collected[0:2]
     day_collected = date_collected[2:4]
@@ -472,7 +472,7 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.attrs['Projection'] = new_area.description
     swath.attrs['proj4'] = new_area.proj_id
     swath.attrs['Year collected'] = 2000 + int(year_collected)
-    swath.attrs['Date collected (day/month/year)'] = day_collected + '/' + month_collected + '/' + year_collected
+    swath.attrs['Date collected (day-month-year)'] = day_collected + '-' + month_collected + '-' + year_collected
     swath.attrs['Insitution'] = 'JPL'
     swath.attrs['Mission'] = 'Oceans Melting Greenland'
     swath.attrs['Mission website'] = 'https://omg.jpl.nasa.gov/portal/'
@@ -492,14 +492,14 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.attrs['_CoordinateAxisTypes'] = "GeoX GeoY"
 
     swath['x'].attrs['units']='meter'
-    swath['x'].attrs['long_name'] = "Cartesian x-coordinate";
+    swath['x'].attrs['long_name'] = "Cartesian x-coordinate"
     swath['x'].attrs['coverage_content_type'] = 'coordinate'
     swath['x'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['x'].attrs['axis'] = 'X'
     swath['x'].attrs['valid_range'] = (np.min(utm_x), np.max(utm_x))
 
     swath['y'].attrs['units']='meter'
-    swath['y'].attrs['long_name'] =  "Cartesian y-coordinate";
+    swath['y'].attrs['long_name'] =  "Cartesian y-coordinate"
     swath['y'].attrs['coverage_content_type'] = 'coordinate'
     swath['y'].attrs['standard_name'] = 'projection_x_coordinate'
     swath['y'].attrs['axis'] = 'Y'
