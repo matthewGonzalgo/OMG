@@ -440,17 +440,7 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
     swath.name = 'elevation'
     swath = swath.to_dataset()
 
-<<<<<<< HEAD
-    swath = xr.Dataset( \
-            {'elevation': (['y','x'], resampled)}, \
-            coords = {'y': utm_y, \
-                      'x': utm_x, \
-                      'longitude': (('y','x'), new_grid_lon), \
-                      'latitude' : (('y','x'), new_grid_lat)})
 
-
-=======
->>>>>>> 81241c5e92d5ae039bddf499412d610fac4fedd0
     print ('SAVING .... ')
     print ('new area : ')
     print (new_area)
