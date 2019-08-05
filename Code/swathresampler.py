@@ -420,7 +420,27 @@ def find_nth(haystack, needle, n):
 def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path):
     new_grid_lon, new_grid_lat = new_area.get_lonlats()
 
+    print ('NGLAT 0/-1 ')
+    print (new_grid_lat[0,0], new_grid_lat[-1,0])
+    print ('NGLON 0/-1 ')
+    print (new_grid_lon[0,0], new_grid_lon[-1,0])
 
+    # another manifestation of the orientation problem
+    if new_grid_lat[0,0] > new_grid_lat[-1,0]:
+        new_grid_lat = np.flipud(new_grid_lat)
+
+    #da = xr.DataArray(g, dims= ('lat','lon'), coords={'lat': lat, 'lon': lon})
+    swath = xr.DataArray(resampled, \
+                dims = ('y','x'), \
+                coords = {'y': utm_y, \
+                          'x': utm_x, \
+                          'lon': (('y','x'), new_grid_lon), \
+                          'lat': (('y','x'), new_grid_lat)})
+
+    swath.name = 'elevation'
+    swath = swath.to_dataset()
+
+<<<<<<< HEAD
     swath = xr.Dataset( \
             {'elevation': (['y','x'], resampled)}, \
             coords = {'y': utm_y, \
@@ -429,6 +449,8 @@ def save_resample(resampled, utm_x, utm_y, new_area, resolution, name, save_path
                       'latitude' : (('y','x'), new_grid_lat)})
 
 
+=======
+>>>>>>> 81241c5e92d5ae039bddf499412d610fac4fedd0
     print ('SAVING .... ')
     print ('new area : ')
     print (new_area)
