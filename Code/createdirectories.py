@@ -3,6 +3,17 @@ import argparse
 import time
 import os
 
+"""
+This script requires a csv file as input which should contain all the
+appropriate swath data.
+
+Using the data from the csv file, this program will create an appropriate name 
+for the directory and successively download the correspondiong grid and 
+annotation files for that swath.
+
+More information on how to format the csv file and how to set up your machine
+for this program can be found in the official OMG Glistin Documentation.
+"""
 
 #
 # Simply creates a directory with the given name
@@ -72,8 +83,9 @@ def make_directories(sheet, start, stop, usr):
                     print ('found new heading in swath id ' + str(id))
                     print (' .... ' + heading)
                     headings.append(heading)
-
-                    new_dir = dir + '_' + heading # Adding second heading number including name
+                    
+                    # Adding second heading number including name
+                    new_dir = dir + '_' + heading 
                     print ('updating dir to ' + new_dir)
                     #try:
                     #    os.rename(dir, new_dir)
@@ -112,6 +124,9 @@ def hewa_download(user, saveto, file_name):
     print("grid file: " + grd)
 
     start_time = time.time()
+
+    # Found out rynsc was better than scp. One reason is that rsync
+    # continues downloading if connection is temporarilyi lost.
     #os.system("scp " + user + "@hewa://project/glistin/data/" + file_name + "/" + ann + " " + saveto)
     #os.system("scp " + user + "@hewa://project/glistin/data/" + file_name + "/" + grd + " " + saveto)
     
@@ -120,17 +135,7 @@ def hewa_download(user, saveto, file_name):
     
     print("Download runtime: --- %s seconds ---" % (time.time() - start_time))
 
-    '''
-    privatekeyfile = os.path.expanduser('~/.ssh/id_rsa')
-    mykey = paramiko.RSAKey.from_private_key_file(privatekeyfile)
-    ssh.connect(IP[0], username = user[0], pkey = mykey)
-    '''
-    
-    '''
-    ftp_client=ssh_client.open_sftp()
-    ftp_client.get(‘remotefileth’,’localfilepath’)
-    ftp_client.close()
-    '''
+  
 if __name__ == '__main__':
     start_time = time.time()
     parser = argparse.ArgumentParser()

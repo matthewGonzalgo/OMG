@@ -5,25 +5,29 @@ import matplotlib.pyplot as plt
 from pyresample import kd_tree, geometry 
 import xarray as xr
 import utm
-import time
+from time import time
 import argparse # For command line interface
 import math
 from datetime import datetime
 from createdirectories import create_directory
 import copy as copy
 
-'''
-This is a resampler for an entire collection of swath data.
-The main argument is the directory containing all the years data for a given swath
-Assumes the directory and file names are consistent with the 'greenl' 'grland' naming convention
+""""
+This is a resampler for an entire collection of swath data. 
+The main argument is the directory containing all the years data for a given swath.
+Assumes the directory and file names are consistent with the 'greenl' 'grland' 
+naming convention.
+
+Basic outline of how the program works:
 Store data array from data file
-Parse all annotation files in a given directory for number of longitude and latitude lines, starting longitude and latitude for area extent, and spacing
+Parse all annotation files in a given directory for number of longitude and 
+latitude lines, starting longitude and latitude for area extent, and spacing
 Keep track of the largest longitude and latitude bounds based on the corners
 Use number of longitude and latitude lines to reshape the the data array
 Create utm arrays from the latlons
 Find minimum data value and make a new data array that fills values lower than minimum with np.nan
 Use parsed starting longitude and latitude corners to define area extent of original area
-'''
+"""
 
 #
 # Parses data from anonotation file
@@ -98,7 +102,7 @@ def get_variables(annotation):
 #
 def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, name, save_path):
     print("Saving original and resampled plots")
-    start_time = time.time()
+    start_time = time()
 
     fig_max_points_on_one_side = 2000
 
@@ -120,33 +124,33 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
     plt.figure(figsize=(10,10))
     
     if skip_orig > 1:
-        plt.imshow(original[::skip_orig, ::skip_orig],vmin=0, vmax=500, cmap='jet'); \
+        plt.imshow(original[::skip_orig, ::skip_orig],vmin=0, vmax=1500, cmap='jet'); \
         plt.title('Original data [skipping every ' + str(skip_orig) + ' cells]')
     else:
         plt.imshow(original, vmin=0, vmax=500, cmap='jet')
         plt.title('Original data')
         
     plt.colorbar()
-    print("Original plotting time: --- %s seconds ---" % (time.time() - start_time))
+    print("Original plotting time: --- %s seconds ---" % (time() - start_time))
     plt.savefig(save_path + name + "original_array.png")
     print('Saved original')
 
 
     ### pcolormesh
 
-    start_time = time.time()
+    start_time = time()
     plt.figure(figsize=(10, 10))
     if skip_orig > 1:
         plt.pcolormesh(lons[::skip_orig], \
                        lats[::skip_orig], \
-                   original[::skip_orig, ::skip_orig], vmin=0, vmax=500, cmap='jet')
+                   original[::skip_orig, ::skip_orig], vmin=0, vmax=1500, cmap='jet')
         plt.title('Original data [skipping every ' + str(skip_orig) + ' cells]')
     else:
         plt.pcolormesh(lons, lats, original, vmin=0, vmax=500, cmap='jet')
         plt.title('Original data')
     
     plt.colorbar();plt.grid()
-    print("Original latlon plotting time: --- %s seconds ---" % (time.time() - start_time))
+    print("Original latlon plotting time: --- %s seconds ---" % (time() - start_time))
 
     plt.savefig(save_path + name + "original_mapped.png")
     print('Saved original latlon')
@@ -163,7 +167,7 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
     skip_resampled = int(np.maximum(skip_x_resampled, skip_y_resampled))
     print('resampled skipping: ', skip_resampled)
 
-    start_time = time.time()
+    start_time = time()
 
     ### imshow
 
@@ -179,7 +183,7 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
         plt.title('resampled data')
         
     plt.colorbar();plt.grid()
-    print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
+    print("Resampled plotting time: --- %s seconds ---" % (time() - start_time))
     plt.savefig(save_path + name + "resampled_array.png")
     print('Saved resampled')
 
@@ -197,7 +201,7 @@ def save_and_show(original, xspace, yspace, lats, lons, resampled, resolution, n
         plt.title('resampled data')
         
     plt.colorbar();plt.grid()
-    print("Resampled plotting time: --- %s seconds ---" % (time.time() - start_time))
+    print("Resampled plotting time: --- %s seconds ---" % (time() - start_time))
     plt.savefig(save_path + name + "resampled_mapped.png")
     print('Saved resampled')
 
@@ -224,8 +228,8 @@ def resample(grid, annotation, vardict, lat_centers, lon_centers, area_new, test
     print(grid.shape)
 
 
-    num_grid_rows = grid.shape[0]
-    num_grid_columns = grid.shape[1]
+    # num_grid_rows = grid.shape[0]
+    # num_grid_columns = grid.shape[1]
 
     #
     # Original Area definition:
@@ -264,7 +268,7 @@ def resample(grid, annotation, vardict, lat_centers, lon_centers, area_new, test
     print(datetime.now())
     print("--- Resampling ---")
     wf = lambda r: 1
-    start_time = time.time()
+    start_time = time()
     
     # Multiplying radius of influence by test to account for skipping data when downsizing
     result = kd_tree.resample_custom(area_original, grid, area_new, \
@@ -278,7 +282,7 @@ def resample(grid, annotation, vardict, lat_centers, lon_centers, area_new, test
         result = np.flipud(result)
 
     
-    print("Result calculation time: --- %s seconds ---" % (time.time() - start_time))
+    print("Result calculation time: --- %s seconds ---" % (time() - start_time))
     print("Resulting shape:")
     print(result.shape)
 
@@ -604,7 +608,7 @@ def max_area(directory):
 
 
 if __name__ == '__main__':
-    start_time = time.time()
+    start_time = time()
 
     parser = argparse.ArgumentParser()
     #
@@ -659,7 +663,7 @@ if __name__ == '__main__':
     #
     area_id_new = 'WGS84 / UTMzone ' + tag + 'N'
     description_new = 'UTM ' + tag + 'N ' + swath_directory_name
-    proj_id_new = "+init=epsg:326" + tag;
+    proj_id_new = "+init=epsg:326" + tag
     proj_string_new = '+proj=utm +zone=' + str(tag) + ' +ellps=WGS84 +datum=WGS84 +units=m +no_defs' 
     width_new = n_xcells
     height_new = n_ycells
@@ -774,5 +778,5 @@ if __name__ == '__main__':
         save_resample(plot, x_utm_centers, y_utm_centers, area_new, args.res, name, netCDF_dir)
 
 # save_resample(plot, x_utm_centers, y_utm_centers, new_area, args.res, name, args.save)
-    print("Total runtime of multiresampler: --- %s seconds ---" % (time.time() - start_time))
+    print("Total runtime of multiresampler: --- %s seconds ---" % (time() - start_time))
     print("Done!\n")
