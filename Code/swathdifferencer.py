@@ -118,11 +118,11 @@ def save_differences(differences, save_dir):
         diff.elevation.plot(vmin=-20, vmax=20, cmap='bwr_r')
 
         year_diff_str = str(diff.attrs['Newer year']) + '-' + str(diff.attrs['Older year'])
+        id = diff.elevation.attrs['description']
+        plt.title('Swath ID ' + id + ' ' + year_diff_str + ' elevation difference')
 
-        plt.title('Swath ID ' + diff.elevation.attrs['description'] + ' ' + year_diff_str + ' elevation difference')
 
-
-        saveas = swathid_dir + '_' + year_diff_str
+        saveas = swathid_dir + '/' + id + '_' + year_diff_str
         
         pngsave = saveas + '.png'
         plt.savefig(saveas + '.png')
